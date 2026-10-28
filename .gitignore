@@ -1,0 +1,6 @@
+# IntelliJ local project settings
+.idea/
+*.iml
+
+# Maven-generated build files
+**/target/
