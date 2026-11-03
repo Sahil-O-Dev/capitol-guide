@@ -3,6 +3,9 @@ package dev.capitolguide.member;
 import dev.capitolguide.congress.dto.MemberSummaryDto;
 import dev.capitolguide.congress.dto.TermDto;
 
+import org.springframework.stereotype.Component;
+
+@Component
 public class MemberMapper {
 
     public Member toMember(MemberSummaryDto source) {
