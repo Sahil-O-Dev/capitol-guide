@@ -30,36 +30,12 @@ public class Member
         this.bioguideId = bioguideId;
     }
 
-    public String getPartyName() {
-        return partyName;
-    }
-
-    public void setPartyName(String partyName) {
-        this.partyName = partyName;
-    }
-
     public String getState() {
         return state;
     }
 
     public void setState(String state) {
         this.state = state;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public String getImageAttribution() {
-        return imageAttribution;
-    }
-
-    public void setImageAttribution(String imageAttribution) {
-        this.imageAttribution = imageAttribution;
     }
 
     public String getChamber() {
@@ -70,12 +46,20 @@ public class Member
         this.chamber = chamber;
     }
 
-    public String getImageUrl() {
-        return imageUrl;
+    public String getPartyName() {
+        return partyName;
     }
 
-    public void setImageUrl(String imageUrl) {
-        this.imageUrl = imageUrl;
+    public void setPartyName(String partyName) {
+        this.partyName = partyName;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
     }
 
     public Integer getChamberStartYear() {
@@ -84,6 +68,22 @@ public class Member
 
     public void setChamberStartYear(Integer chamberStartYear) {
         this.chamberStartYear = chamberStartYear;
+    }
+
+    public String getImageUrl() {
+        return imageUrl;
+    }
+
+    public void setImageUrl(String imageUrl) {
+        this.imageUrl = imageUrl;
+    }
+
+    public String getImageAttribution() {
+        return imageAttribution;
+    }
+
+    public void setImageAttribution(String imageAttribution) {
+        this.imageAttribution = imageAttribution;
     }
 
     public Integer getDistrict() {
