@@ -6,6 +6,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.HttpClientErrorException;
 
 import java.util.List;
 
@@ -14,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withTooManyRequests;
 
 class CongressApiClientTest
 {
@@ -129,6 +131,26 @@ class CongressApiClientTest
 
         assertThrows(HttpServerErrorException.class,
                 () -> client.fetchAllMembers());
+
+        server.verify();
+    }
+
+    @Test
+    void failsWhenRateLimited()
+    {
+        RestClient.Builder builder = RestClient.builder();
+
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+
+        CongressApiClient client = new CongressApiClient("test-key", builder);
+
+        server.expect(requestTo("https://api.congress.gov/v3/member?currentMember=true&format=json&limit=20&offset=0"))
+                .andRespond(withTooManyRequests());
+
+        var error = assertThrows(HttpClientErrorException.class,
+                () -> client.fetchAllMembers());
+
+        assertEquals(429, error.getStatusCode().value());
 
         server.verify();
     }
