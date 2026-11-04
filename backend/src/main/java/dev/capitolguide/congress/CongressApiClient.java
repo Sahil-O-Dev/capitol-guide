@@ -12,15 +12,15 @@ import java.util.List;
 @Component
 public class CongressApiClient
 {
-
     private final String apiKey;
-    private final RestClient restClient = RestClient.builder()
-            .baseUrl("https://api.congress.gov/v3")
-            .build();
+    private final RestClient restClient;
 
-    public CongressApiClient(@Value("${CONGRESS_API_KEY}") String apiKey)
+    public CongressApiClient(@Value("${CONGRESS_API_KEY}") String apiKey, RestClient.Builder builder)
     {
         this.apiKey = apiKey;
+        this.restClient = builder
+                .baseUrl("https://api.congress.gov/v3")
+                .build();
     }
 
     public MemberListResponseDto fetchMembers(int offset)
