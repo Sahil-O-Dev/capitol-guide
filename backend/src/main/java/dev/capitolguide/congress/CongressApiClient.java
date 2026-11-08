@@ -1,5 +1,7 @@
 package dev.capitolguide.congress;
 
+import dev.capitolguide.congress.dto.MemberDetailDto;
+import dev.capitolguide.congress.dto.MemberDetailResponseDto;
 import dev.capitolguide.congress.dto.MemberListResponseDto;
 import dev.capitolguide.congress.dto.MemberSummaryDto;
 import org.springframework.beans.factory.annotation.Value;
@@ -46,5 +48,30 @@ public class CongressApiClient
         }
 
         return allMembers;
+    }
+
+    public MemberDetailResponseDto fetchDetailMember(String bioguideId)
+    {
+
+        MemberDetailResponseDto response = restClient.get()
+                .uri("https://api.congress.gov/v3/member/{bioguideId}?format=json", bioguideId)
+                .header("X-Api-Key", apiKey)
+                .retrieve()
+                .body(MemberDetailResponseDto.class);
+
+        return response;
+    }
+
+    public List<MemberDetailResponseDto> fetchAllDetailMembers()
+    {
+        List<MemberSummaryDto> allMembers = fetchAllMembers();
+        List<MemberDetailResponseDto> allDetailMembers = new ArrayList<>();
+
+        for(MemberSummaryDto memberSummaryDto: allMembers)
+        {
+            String bioguideId = memberSummaryDto.getBioguideId();
+            allDetailMembers.add(fetchDetailMember(bioguideId));
+        }
+        return allDetailMembers;
     }
 }
