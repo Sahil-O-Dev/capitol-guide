@@ -2,6 +2,7 @@ package dev.capitolguide.member;
 
 import dev.capitolguide.member.dto.MemberResponseDto;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -20,8 +21,10 @@ public class MemberController
 
 
     @GetMapping("/api/members")
-    public List<MemberResponseDto> getMembers()
+    public List<MemberResponseDto> getMembers(@RequestParam("state") String state, @RequestParam("chamber") String chamber)
     {
-        return memberResponseMapper.toDtoList(memberRepository.findAll());
+        List<Member> members = memberRepository.findByStateAndChamber(state, chamber);
+
+        return memberResponseMapper.toDtoList(members);
     }
 }
