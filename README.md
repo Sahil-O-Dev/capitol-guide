@@ -2,7 +2,22 @@
 
 A website to help people discover and learn about their congressional representatives.
 
-Status: React frontend connected to the Spring Boot health endpoint. Congressional browsing and data integration are not implemented yet.
+Status: The React frontend is connected to the Spring Boot health endpoint. The backend can import congressional member summaries into PostgreSQL and return saved members filtered by state and chamber. Map browsing and member profile pages are not implemented yet.
+
+## Member list API
+
+With the backend running on port 8080 and member summaries already imported, request:
+
+```text
+http://localhost:8080/api/members?state=Virginia&chamber=Senate
+http://localhost:8080/api/members?state=Virginia&chamber=House%20of%20Representatives
+```
+
+Both `state` and `chamber` are required; omitting either returns HTTP 400. Use the state name and chamber exactly as stored, such as `Virginia`, `Senate`, or `House of Representatives`. `%20` encodes a space in the URL.
+
+The endpoint returns a JSON array of matching members from our database. No matches returns `[]`. Each member includes `bioguideId`, `name`, `partyName`, `state`, `chamber`, `district`, `imageUrl`, and `imageAttribution`; unavailable values can be null. Visitor requests do not trigger a Congress.gov import.
+
+The Congress.gov client also has methods to fetch one member's detailed information or collect details using IDs from the member list. Detail responses are not yet saved to PostgreSQL or exposed through a local profile endpoint. The single-member request has a mocked client test; the full detail collection flow has not yet been verified.
 
 ## Local database requirements
 
