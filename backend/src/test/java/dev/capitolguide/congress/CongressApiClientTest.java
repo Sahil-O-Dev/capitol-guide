@@ -23,6 +23,26 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 class CongressApiClientTest
 {
     @Test
+    void rejectsMissingMemberDetails()
+    {
+        for (String body : List.of("", "null", "{}", "{\"member\":null}"))
+        {
+            RestClient.Builder builder = RestClient.builder();
+            MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+            CongressApiClient client = new CongressApiClient("test-key", builder);
+
+            server.expect(requestTo("https://api.congress.gov/v3/member/DEV_DETAIL001?format=json"))
+                    .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+
+            IllegalStateException error = assertThrows(IllegalStateException.class,
+                    () -> client.fetchDetailMember("DEV_DETAIL001"));
+
+            assertEquals("Congress.gov returned no member details for ID DEV_DETAIL001", error.getMessage());
+            server.verify();
+        }
+    }
+
+    @Test
     void fetchesMemberDetails()
     {
         RestClient.Builder builder = RestClient.builder();

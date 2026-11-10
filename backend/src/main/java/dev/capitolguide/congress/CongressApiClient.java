@@ -59,6 +59,11 @@ public class CongressApiClient
                 .retrieve()
                 .body(MemberDetailResponseDto.class);
 
+        if (response == null || response.getMember() == null)
+        {
+            throw new IllegalStateException("Congress.gov returned no member details for ID " + bioguideId);
+        }
+
         return response;
     }
 
