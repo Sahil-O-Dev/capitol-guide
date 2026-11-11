@@ -14,6 +14,8 @@ import java.util.List;
 @Component
 public class CongressApiClient
 {
+    private static final int PAGE_SIZE = 250;
+
     private final String apiKey;
     private final RestClient restClient;
 
@@ -28,7 +30,7 @@ public class CongressApiClient
     public MemberListResponseDto fetchMembers(int offset)
     {
         return restClient.get()
-                .uri("/member?currentMember=true&format=json&limit=20&offset={offset}", offset)
+                .uri("/member?currentMember=true&format=json&limit={limit}&offset={offset}", PAGE_SIZE, offset)
                 .header("X-Api-Key", apiKey)
                 .retrieve()
                 .body(MemberListResponseDto.class);
@@ -42,7 +44,7 @@ public class CongressApiClient
 
         while(response.getPagination().getNext() != null)
         {
-            offset += 20;
+            offset += PAGE_SIZE;
             response = fetchMembers(offset);
             allMembers.addAll(response.getMembers());
         }

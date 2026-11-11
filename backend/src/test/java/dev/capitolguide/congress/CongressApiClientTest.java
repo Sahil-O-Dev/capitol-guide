@@ -130,7 +130,7 @@ class CongressApiClientTest
 
         CongressApiClient client = new CongressApiClient("test-key", builder);
 
-        server.expect(requestTo("https://api.congress.gov/v3/member?currentMember=true&format=json&limit=20&offset=0"))
+        server.expect(requestTo("https://api.congress.gov/v3/member?currentMember=true&format=json&limit=250&offset=0"))
                 .andRespond(withSuccess("""
                         {
                           "members": [
@@ -162,7 +162,7 @@ class CongressApiClientTest
 
         CongressApiClient client = new CongressApiClient("test-key", builder);
 
-        server.expect(requestTo("https://api.congress.gov/v3/member?currentMember=true&format=json&limit=20&offset=0"))
+        server.expect(requestTo("https://api.congress.gov/v3/member?currentMember=true&format=json&limit=250&offset=0"))
                 .andRespond(withSuccess("""
                         {
                           "members": [
@@ -173,12 +173,12 @@ class CongressApiClientTest
                           ],
                           "pagination": {
                              "count": 2,
-                             "next": "https://api.congress.gov/v3/member?currentMember=true&format=json&limit=20&offset=20"
+                             "next": "https://api.congress.gov/v3/member?currentMember=true&format=json&limit=250&offset=250"
                            }
                         }
                         """, MediaType.APPLICATION_JSON));
 
-        server.expect(requestTo("https://api.congress.gov/v3/member?currentMember=true&format=json&limit=20&offset=20"))
+        server.expect(requestTo("https://api.congress.gov/v3/member?currentMember=true&format=json&limit=250&offset=250"))
                 .andRespond(withSuccess("""
                         {
                           "members": [
@@ -212,7 +212,7 @@ class CongressApiClientTest
 
         CongressApiClient client = new CongressApiClient("test-key", builder);
 
-        server.expect(requestTo("https://api.congress.gov/v3/member?currentMember=true&format=json&limit=20&offset=0"))
+        server.expect(requestTo("https://api.congress.gov/v3/member?currentMember=true&format=json&limit=250&offset=0"))
                 .andRespond(withSuccess("""
                         {
                           "members": [
@@ -223,12 +223,12 @@ class CongressApiClientTest
                           ],
                           "pagination": {
                              "count": 2,
-                             "next": "https://api.congress.gov/v3/member?currentMember=true&format=json&limit=20&offset=20"
+                             "next": "https://api.congress.gov/v3/member?currentMember=true&format=json&limit=250&offset=250"
                            }
                         }
                         """, MediaType.APPLICATION_JSON));
 
-        server.expect(requestTo("https://api.congress.gov/v3/member?currentMember=true&format=json&limit=20&offset=20"))
+        server.expect(requestTo("https://api.congress.gov/v3/member?currentMember=true&format=json&limit=250&offset=250"))
                 .andRespond(withServerError());
 
         assertThrows(HttpServerErrorException.class,
@@ -246,7 +246,7 @@ class CongressApiClientTest
 
         CongressApiClient client = new CongressApiClient("test-key", builder);
 
-        server.expect(requestTo("https://api.congress.gov/v3/member?currentMember=true&format=json&limit=20&offset=0"))
+        server.expect(requestTo("https://api.congress.gov/v3/member?currentMember=true&format=json&limit=250&offset=0"))
                 .andRespond(withTooManyRequests());
 
         var error = assertThrows(HttpClientErrorException.class,
