@@ -5,6 +5,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import java.time.Instant;
+
 
 @Entity
 @Table(name = "members")
@@ -20,6 +22,9 @@ public class Member
     private String imageAttribution;
     private Integer district;
     private Integer chamberStartYear;
+    private String officialWebsiteUrl;
+    private Boolean currentMember;
+    private Instant sourceUpdateDate;
 
 
     public String getBioguideId() {
@@ -92,5 +97,29 @@ public class Member
 
     public void setDistrict(Integer district) {
         this.district = district;
+    }
+
+    public Boolean getCurrentMember() {
+        return currentMember;
+    }
+
+    public void setCurrentMember(Boolean currentMember) {
+        this.currentMember = currentMember;
+    }
+
+    public String getOfficialWebsiteUrl() {
+        return officialWebsiteUrl;
+    }
+
+    public void setOfficialWebsiteUrl(String officialWebsiteUrl) {
+        this.officialWebsiteUrl = officialWebsiteUrl;
+    }
+
+    public Instant getSourceUpdateDate() {
+        return sourceUpdateDate;
+    }
+
+    public void setSourceUpdateDate(Instant sourceUpdateDate) {
+        this.sourceUpdateDate = sourceUpdateDate;
     }
 }

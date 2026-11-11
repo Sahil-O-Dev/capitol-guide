@@ -1,29 +1,21 @@
 package dev.capitolguide.member;
 
-
-import dev.capitolguide.congress.dto.DepictionDto;
-import dev.capitolguide.congress.dto.MemberSummaryDto;
-import dev.capitolguide.congress.dto.TermDto;
-import dev.capitolguide.congress.dto.TermListDto;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
-import java.util.NoSuchElementException;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-
-@SpringBootTest
+@SpringBootTest(properties = "CONGRESS_API_KEY=unused-test-key")
 @Transactional
-public class MemberImportServiceTest
-{
+class MemberImportServiceTest {
     @Autowired
     private MemberImportService memberImportService;
 
@@ -33,157 +25,93 @@ public class MemberImportServiceTest
     @Autowired
     private EntityManager entityManager;
 
-
     @Test
-    void savesMappedMember()
-    {
-        MemberSummaryDto source = new MemberSummaryDto();
-        source.setBioguideId("DEV001");
-        source.setName("Development Member");
-        source.setPartyName("Test Party");
-        source.setState("Virginia");
+    void savesPreparedMembersWithDetails() {
+        Member first = fictionalMember("DEV_DETAIL_SAVE001");
+        Member second = fictionalMember("DEV_DETAIL_SAVE002");
+        second.setOfficialWebsiteUrl(null);
+        second.setCurrentMember(null);
+        second.setSourceUpdateDate(null);
 
-
-        TermDto house = new TermDto();
-        house.setChamber("House of Representatives");
-        house.setStartYear(2009);
-
-        TermDto senate = new TermDto();
-        senate.setChamber("Senate");
-        senate.setStartYear(2013);
-
-        TermListDto terms = new TermListDto();
-        terms.setItem(List.of(house, senate));
-        source.setTerms(terms);
-
-        memberImportService.saveMember(source);
-
+        List<Member> saved = memberImportService.saveMembers(List.of(first, second));
+        assertEquals(2, saved.size());
         entityManager.flush();
         entityManager.clear();
 
-        Member result = memberRepository.findById("DEV001").orElseThrow();
+        Member result = memberRepository.findById(first.getBioguideId()).orElseThrow();
+        assertEquals(first.getName(), result.getName());
+        assertEquals(first.getChamber(), result.getChamber());
+        assertEquals(first.getOfficialWebsiteUrl(), result.getOfficialWebsiteUrl());
+        assertEquals(Boolean.TRUE, result.getCurrentMember());
+        assertEquals(first.getSourceUpdateDate(), result.getSourceUpdateDate());
 
-        assertEquals("Development Member", result.getName());
-        assertEquals("Senate", result.getChamber());
-        assertEquals(2013, result.getChamberStartYear());
-
+        Member optional = memberRepository.findById(second.getBioguideId()).orElseThrow();
+        assertNull(optional.getOfficialWebsiteUrl());
+        assertNull(optional.getCurrentMember());
+        assertNull(optional.getSourceUpdateDate());
     }
 
     @Test
-    void savesMultipleMembers()
-    {
-        MemberSummaryDto fictionalMember1 = new MemberSummaryDto();
-        MemberSummaryDto fictionalMember2 = new MemberSummaryDto();
+    void updatesAnExistingMemberUsingItsStableId() {
+        Member original = fictionalMember("DEV_DETAIL_UPDATE001");
+        memberRepository.saveAndFlush(original);
+        entityManager.clear();
 
-        fictionalMember1.setBioguideId("DEV_BATCH001");
-        fictionalMember1.setName("Fictional House Member");
-        fictionalMember1.setPartyName("Test Party");
-        fictionalMember1.setState("Virginia");
-        fictionalMember1.setDistrict(1);
-
-        DepictionDto photo1 = new DepictionDto();
-        photo1.setImageUrl("https://example.com/fictional-house.jpg");
-        photo1.setAttribution("Fictional test image");
-        fictionalMember1.setDepiction(photo1);
-
-        TermDto term1 = new TermDto();
-        term1.setChamber("House of Representatives");
-        term1.setStartYear(2025);
-
-        TermListDto terms1 = new TermListDto();
-        terms1.setItem(List.of(term1));
-        fictionalMember1.setTerms(terms1);
-
-
-        fictionalMember2.setBioguideId("DEV_BATCH002");
-        fictionalMember2.setName("Fictional Senate Member");
-        fictionalMember2.setPartyName("Test Party");
-        fictionalMember2.setState("Virginia");
-        fictionalMember2.setDistrict(null);
-
-        DepictionDto photo2 = new DepictionDto();
-        photo2.setImageUrl("https://example.com/fictional-senate.jpg");
-        photo2.setAttribution("Fictional test image");
-        fictionalMember2.setDepiction(photo2);
-
-        TermDto term2 = new TermDto();
-        term2.setChamber("Senate");
-        term2.setStartYear(2023);
-
-        TermListDto terms2 = new TermListDto();
-        terms2.setItem(List.of(term2));
-        fictionalMember2.setTerms(terms2);
-
-        List<MemberSummaryDto> source = List.of(fictionalMember1, fictionalMember2);
-
-        List<Member> members = memberImportService.saveMembers(source);
-
-        assertEquals(2, members.size());
-
+        Member refreshed = fictionalMember(original.getBioguideId());
+        refreshed.setName("Fictional Updated Member");
+        refreshed.setOfficialWebsiteUrl("https://example.com/updated");
+        refreshed.setCurrentMember(false);
+        refreshed.setSourceUpdateDate(Instant.parse("2026-11-06T12:00:00Z"));
+        memberImportService.saveMembers(List.of(refreshed));
         entityManager.flush();
         entityManager.clear();
 
-        Member savedMember1 = memberRepository.findById(fictionalMember1.getBioguideId()).orElseThrow();
-        Member savedMember2 = memberRepository.findById(fictionalMember2.getBioguideId()).orElseThrow();
-
-        assertEquals(fictionalMember1.getName(), savedMember1.getName());
-        assertEquals(fictionalMember2.getName(), savedMember2.getName());
+        Member result = memberRepository.findById(original.getBioguideId()).orElseThrow();
+        assertEquals(refreshed.getName(), result.getName());
+        assertEquals(refreshed.getOfficialWebsiteUrl(), result.getOfficialWebsiteUrl());
+        assertEquals(Boolean.FALSE, result.getCurrentMember());
+        assertEquals(refreshed.getSourceUpdateDate(), result.getSourceUpdateDate());
     }
 
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    void rollsBackBatchWhenOneMemberFails()
-    {
-        MemberSummaryDto fictionalMember1 = new MemberSummaryDto();
-        MemberSummaryDto fictionalMember2 = new MemberSummaryDto();
+    void rollsBackDatabaseFailureAndPreservesPreviouslySavedMember() {
+        String existingId = "DEV_DETAIL_ROLLBACK001";
+        String invalidId = "DEV_DETAIL_ROLLBACK002";
+        Member original = fictionalMember(existingId);
+        memberRepository.saveAndFlush(original);
 
-        fictionalMember1.setBioguideId("DEV_BATCH001");
-        fictionalMember1.setName("Fictional House Member");
-        fictionalMember1.setPartyName("Test Party");
-        fictionalMember1.setState("Virginia");
-        fictionalMember1.setDistrict(1);
+        try {
+            Member changed = fictionalMember(existingId);
+            changed.setName("Fictional Change That Must Roll Back");
+            changed.setOfficialWebsiteUrl("https://example.com/must-not-persist");
+            Member invalid = fictionalMember(invalidId);
+            invalid.setName(null); // The database's NOT NULL constraint must reject this record.
 
-        DepictionDto photo1 = new DepictionDto();
-        photo1.setImageUrl("https://example.com/fictional-house.jpg");
-        photo1.setAttribution("Fictional test image");
-        fictionalMember1.setDepiction(photo1);
+            assertThrows(DataIntegrityViolationException.class,
+                    () -> memberImportService.saveMembers(List.of(changed, invalid)));
 
-        TermDto term1 = new TermDto();
-        term1.setChamber("House of Representatives");
-        term1.setStartYear(2025);
+            Member result = memberRepository.findById(existingId).orElseThrow();
+            assertEquals(original.getName(), result.getName());
+            assertEquals(original.getOfficialWebsiteUrl(), result.getOfficialWebsiteUrl());
+            assertFalse(memberRepository.existsById(invalidId));
+        } finally {
+            // This test has no outer test transaction, so remove its committed seed record.
+            memberRepository.deleteAllById(List.of(existingId, invalidId));
+        }
+    }
 
-        TermListDto terms1 = new TermListDto();
-        terms1.setItem(List.of(term1));
-        fictionalMember1.setTerms(terms1);
-
-
-        fictionalMember2.setBioguideId("DEV_BATCH002");
-        fictionalMember2.setName("Fictional Senate Member");
-        fictionalMember2.setPartyName("Test Party");
-        fictionalMember2.setState("Virginia");
-        fictionalMember2.setDistrict(null);
-
-        DepictionDto photo2 = new DepictionDto();
-        photo2.setImageUrl("https://example.com/fictional-senate.jpg");
-        photo2.setAttribution("Fictional test image");
-        fictionalMember2.setDepiction(photo2);
-
-        TermDto term2 = new TermDto();
-        term2.setChamber("Senate");
-        term2.setStartYear(2023);
-
-        TermListDto terms2 = new TermListDto();
-        terms2.setItem(List.of());
-        fictionalMember2.setTerms(terms2);
-
-        List<MemberSummaryDto> source = List.of(fictionalMember1, fictionalMember2);
-
-
-
-
-        assertThrows(NoSuchElementException.class, ()-> memberImportService.saveMembers((source)));
-
-        assertFalse(memberRepository.existsById(fictionalMember1.getBioguideId()));
-        assertFalse(memberRepository.existsById(fictionalMember2.getBioguideId()));
+    private Member fictionalMember(String id) {
+        Member member = new Member();
+        member.setBioguideId(id);
+        member.setName("Fictional Development Member " + id);
+        member.setPartyName("Test Party");
+        member.setState("Virginia");
+        member.setChamber("Senate");
+        member.setChamberStartYear(2025);
+        member.setOfficialWebsiteUrl("https://example.com/" + id);
+        member.setCurrentMember(true);
+        member.setSourceUpdateDate(Instant.parse("2026-11-05T08:36:10Z"));
+        return member;
     }
 }
