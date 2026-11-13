@@ -2,7 +2,7 @@
 
 A website to help people discover and learn about their congressional representatives.
 
-Status: The React frontend is connected to the Spring Boot health endpoint. The backend can import congressional member summaries and selected detail fields into PostgreSQL and return saved members filtered by state and chamber. Map browsing and member profile pages are not implemented yet.
+Status: The React frontend is connected to the Spring Boot health endpoint. The backend can import congressional member summaries and selected detail fields into PostgreSQL, list saved members by state and chamber, and return an individual saved profile. Map browsing and member profile pages are not implemented yet.
 
 ## Member list API
 
@@ -17,7 +17,21 @@ Both `state` and `chamber` are required; omitting either returns HTTP 400. Use t
 
 The endpoint returns a JSON array of matching members from our database. No matches returns `[]`. Each member includes `bioguideId`, `name`, `partyName`, `state`, `chamber`, `district`, `imageUrl`, and `imageAttribution`; unavailable values can be null. Visitor requests do not trigger a Congress.gov import.
 
-The importer stores `officialWebsiteUrl`, `currentMember`, and `sourceUpdateDate` from each member's detail response. These fields are not yet included in the list response, and a local profile endpoint is not implemented.
+The importer stores `officialWebsiteUrl`, `currentMember`, and `sourceUpdateDate` from each member's detail response. These fields are included in the profile response below; the list response keeps its existing fields.
+
+## Member profile API
+
+With the backend running, request a saved member by Bioguide ID:
+
+```text
+http://localhost:8080/api/members/{bioguideId}
+```
+
+Replace `{bioguideId}` with an ID from the member list. A saved ID returns HTTP 200 with one profile object; an unknown ID returns HTTP 404.
+
+The profile contains the list fields plus `chamberStartYear`, `officialWebsiteUrl`, `currentMember`, `sourceUpdateDate`, `terms`, and `partyHistory`. Histories are read from the database and ordered by start year, then row ID. Missing histories return empty arrays. Optional values, including a missing end year, can be null. `sourceUpdateDate` is Congress.gov's record update time, not our import time.
+
+The history tables and read endpoints are implemented, but the importer does not yet populate terms or party history. Existing imported members will have empty history arrays until history importing is added. Profile requests only read PostgreSQL and do not call Congress.gov.
 
 ## Import congressional members
 
@@ -44,7 +58,7 @@ The client requests up to 250 summaries per page and advances the offset by 250 
 
 From `backend/`, using Java 21, run `./mvnw test` with PostgreSQL running and `DB_PASSWORD` and `CONGRESS_API_KEY` set. Tests do not call Congress.gov; the API key may be a dummy value. Leave `congress-import` and `congress-preview` profiles disabled during tests.
 
-Tests cover detail mapping, stable-ID pairing, preparation failures, runner ordering, pagination, database persistence, and rollback after a database constraint failure. API responses are mocked and test member records are fictional. Most database tests roll back their changes; the transaction-failure test commits a fictional seed record and removes it in cleanup. Prefer a dedicated test database by overriding `SPRING_DATASOURCE_URL` and, if needed, `SPRING_DATASOURCE_USERNAME` and `SPRING_DATASOURCE_PASSWORD`.
+Tests cover detail mapping, stable-ID pairing, preparation failures, runner ordering, pagination, database persistence, history filtering/order, and rollback after a database constraint failure. MockMvc controller tests check profile JSON, HTTP 404, empty histories, and the existing list contract. API responses are mocked and test member records are fictional. Most database tests roll back their changes; the transaction-failure test commits a fictional seed record and removes it in cleanup. Prefer a dedicated test database by overriding `SPRING_DATASOURCE_URL` and, if needed, `SPRING_DATASOURCE_USERNAME` and `SPRING_DATASOURCE_PASSWORD`.
 
 ## Local database requirements
 
@@ -61,6 +75,6 @@ Set `DB_PASSWORD` in the environment of whichever process runs the application o
 
 Flyway applies versioned SQL migrations when the application starts. Hibernate validates that the resulting schema matches the Java entities.
 
-`MemberRepositoryTest` and `MemberImportServiceTest` use the configured PostgreSQL database; see the test section above for their data handling.
+Database integration tests use the configured PostgreSQL database; see the test section above for their data handling.
 
 Database creation and complete application run instructions are still to be documented.
