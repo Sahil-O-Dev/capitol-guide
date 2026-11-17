@@ -2,6 +2,7 @@ package dev.capitolguide.member;
 import dev.capitolguide.congress.dto.MemberSummaryDto;
 import dev.capitolguide.congress.dto.MemberDetailDto;
 import dev.capitolguide.congress.dto.MemberDetailTermDto;
+import dev.capitolguide.congress.dto.PartyHistoryDto;
 import dev.capitolguide.congress.dto.TermDto;
 import dev.capitolguide.congress.dto.TermListDto;
 import org.junit.jupiter.api.Test;
@@ -16,6 +17,53 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class MemberMapperTest
 {
+    @Test
+    void mapsPartyHistoryFieldsAndLinksTheSameMember() {
+        Member member = new Member();
+        member.setBioguideId("DEV_PARTY_MAP001");
+        PartyHistoryDto source = new PartyHistoryDto();
+        source.setPartyAbbreviation("T");
+        source.setPartyName("Fictional Test Party");
+        source.setStartYear(2020);
+        source.setEndYear(2024);
+
+        MemberPartyHistory result = new MemberMapper().toMemberPartyHistory(source, member);
+
+        assertSame(member, result.getMember());
+        assertNull(result.getId());
+        assertEquals("T", result.getPartyAbbreviation());
+        assertEquals("Fictional Test Party", result.getPartyName());
+        assertEquals(2020, result.getStartYear());
+        assertEquals(2024, result.getEndYear());
+    }
+
+    @Test
+    void keepsMissingPartyHistoryFieldsNull() {
+        Member member = new Member();
+        PartyHistoryDto source = new PartyHistoryDto();
+        source.setPartyName("Fictional Test Party");
+
+        MemberPartyHistory result = new MemberMapper().toMemberPartyHistory(source, member);
+
+        assertSame(member, result.getMember());
+        assertEquals("Fictional Test Party", result.getPartyName());
+        assertNull(result.getPartyAbbreviation());
+        assertNull(result.getStartYear());
+        assertNull(result.getEndYear());
+    }
+
+    @Test
+    void rejectsPartyHistoryMappingWithoutAMember() {
+        assertThrows(NullPointerException.class,
+                () -> new MemberMapper().toMemberPartyHistory(new PartyHistoryDto(), null));
+    }
+
+    @Test
+    void rejectsPartyHistoryMappingWithoutASource() {
+        assertThrows(NullPointerException.class,
+                () -> new MemberMapper().toMemberPartyHistory(null, new Member()));
+    }
+
     @Test
     void mapsTermFieldsAndLinksTheSameMember() {
         Member member = new Member();
