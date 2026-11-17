@@ -23,7 +23,84 @@ class MemberImportServiceTest {
     private MemberRepository memberRepository;
 
     @Autowired
+    private MemberTermRepository memberTermRepository;
+
+    @Autowired
+    private MemberPartyHistoryRepository memberPartyHistoryRepository;
+
+    @Autowired
     private EntityManager entityManager;
+
+    @Test
+    void savesHistoriesForANewAndAnExistingMember() {
+        Member existing = fictionalMember("DEV_HISTORY_EXISTING");
+        memberRepository.saveAndFlush(existing);
+        entityManager.clear();
+
+        Member refreshed = fictionalMember(existing.getBioguideId());
+        Member added = fictionalMember("DEV_HISTORY_NEW");
+        List<Member> members = List.of(refreshed, added);
+        List<MemberTerm> terms = members.stream().map(member -> {
+            MemberTerm term = new MemberTerm();
+            term.setMember(member);
+            term.setChamber("Senate");
+            term.setStartYear(2025);
+            return term;
+        }).toList();
+        List<MemberPartyHistory> parties = members.stream().map(member -> {
+            MemberPartyHistory party = new MemberPartyHistory();
+            party.setMember(member);
+            party.setPartyName("Fictional Test Party");
+            return party;
+        }).toList();
+
+        memberImportService.saveMembers(new PreparedMembers(members, terms, parties));
+        entityManager.flush();
+        entityManager.clear();
+
+        for (Member member : members) {
+            String id = member.getBioguideId();
+            assertTrue(memberRepository.existsById(id));
+            List<MemberTerm> savedTerms = memberTermRepository
+                    .findByMember_BioguideIdOrderByStartYearAscIdAsc(id);
+            List<MemberPartyHistory> savedParties = memberPartyHistoryRepository
+                    .findByMember_BioguideIdOrderByStartYearAscIdAsc(id);
+            assertEquals(1, savedTerms.size());
+            assertEquals("Senate", savedTerms.getFirst().getChamber());
+            assertEquals(2025, savedTerms.getFirst().getStartYear());
+            assertEquals(1, savedParties.size());
+            assertEquals("Fictional Test Party", savedParties.getFirst().getPartyName());
+        }
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void rollsBackMembersAndTermsWhenPartyHistoryFails() {
+        String id = "DEV_HISTORY_ROLLBACK";
+        Member member = fictionalMember(id);
+        MemberTerm term = new MemberTerm();
+        term.setMember(member);
+        MemberPartyHistory invalidParty = new MemberPartyHistory();
+        // A history row must reference a member; this intentionally omits that reference.
+
+        try {
+            PreparedMembers prepared = new PreparedMembers(
+                    List.of(member), List.of(term), List.of(invalidParty));
+            assertThrows(DataIntegrityViolationException.class,
+                    () -> memberImportService.saveMembers(prepared));
+
+            assertFalse(memberRepository.existsById(id));
+            assertTrue(memberTermRepository.findByMember_BioguideIdOrderByStartYearAscIdAsc(id).isEmpty());
+            assertTrue(memberPartyHistoryRepository.findByMember_BioguideIdOrderByStartYearAscIdAsc(id).isEmpty());
+        } finally {
+            // Also clean up if a regression incorrectly commits an earlier save.
+            memberTermRepository.deleteAll(
+                    memberTermRepository.findByMember_BioguideIdOrderByStartYearAscIdAsc(id));
+            memberPartyHistoryRepository.deleteAll(
+                    memberPartyHistoryRepository.findByMember_BioguideIdOrderByStartYearAscIdAsc(id));
+            memberRepository.deleteAllById(List.of(id));
+        }
+    }
 
     @Test
     void savesPreparedMembersWithDetails() {
@@ -33,8 +110,7 @@ class MemberImportServiceTest {
         second.setCurrentMember(null);
         second.setSourceUpdateDate(null);
 
-        List<Member> saved = memberImportService.saveMembers(List.of(first, second));
-        assertEquals(2, saved.size());
+        memberImportService.saveMembers(new PreparedMembers(List.of(first, second), List.of(), List.of()));
         entityManager.flush();
         entityManager.clear();
 
@@ -62,7 +138,7 @@ class MemberImportServiceTest {
         refreshed.setOfficialWebsiteUrl("https://example.com/updated");
         refreshed.setCurrentMember(false);
         refreshed.setSourceUpdateDate(Instant.parse("2026-11-06T12:00:00Z"));
-        memberImportService.saveMembers(List.of(refreshed));
+        memberImportService.saveMembers(new PreparedMembers(List.of(refreshed), List.of(), List.of()));
         entityManager.flush();
         entityManager.clear();
 
@@ -89,7 +165,8 @@ class MemberImportServiceTest {
             invalid.setName(null); // The database's NOT NULL constraint must reject this record.
 
             assertThrows(DataIntegrityViolationException.class,
-                    () -> memberImportService.saveMembers(List.of(changed, invalid)));
+                    () -> memberImportService.saveMembers(
+                            new PreparedMembers(List.of(changed, invalid), List.of(), List.of())));
 
             Member result = memberRepository.findById(existingId).orElseThrow();
             assertEquals(original.getName(), result.getName());

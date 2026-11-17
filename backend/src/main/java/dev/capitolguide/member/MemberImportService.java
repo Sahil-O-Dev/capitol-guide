@@ -64,7 +64,9 @@ public class MemberImportService {
     }
 
     @Transactional
-    public List<Member> saveMembers(List<Member> members) {
-        return memberRepository.saveAll(members);
+    public void saveMembers(PreparedMembers preparedMembers) {
+        memberRepository.saveAll(preparedMembers.members());
+        memberTermRepository.saveAll(preparedMembers.terms());
+        memberPartyHistoryRepository.saveAll(preparedMembers.partyHistory());
     }
 }

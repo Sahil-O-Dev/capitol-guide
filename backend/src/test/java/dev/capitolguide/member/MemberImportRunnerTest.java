@@ -19,7 +19,7 @@ class MemberImportRunnerTest {
 
         var calls = inOrder(service);
         calls.verify(service).prepareMembers();
-        calls.verify(service).saveMembers(same(prepared.members()));
+        calls.verify(service).saveMembers(same(prepared));
     }
 
     @Test
@@ -29,6 +29,6 @@ class MemberImportRunnerTest {
 
         assertThrows(IllegalStateException.class, () -> new MemberImportRunner(service).run(null));
 
-        verify(service, never()).saveMembers(anyList());
+        verify(service, never()).saveMembers(any());
     }
 }
