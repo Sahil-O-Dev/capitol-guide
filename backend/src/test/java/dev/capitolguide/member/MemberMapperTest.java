@@ -1,6 +1,7 @@
 package dev.capitolguide.member;
 import dev.capitolguide.congress.dto.MemberSummaryDto;
 import dev.capitolguide.congress.dto.MemberDetailDto;
+import dev.capitolguide.congress.dto.MemberDetailTermDto;
 import dev.capitolguide.congress.dto.TermDto;
 import dev.capitolguide.congress.dto.TermListDto;
 import org.junit.jupiter.api.Test;
@@ -15,6 +16,66 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class MemberMapperTest
 {
+    @Test
+    void mapsTermFieldsAndLinksTheSameMember() {
+        Member member = new Member();
+        member.setBioguideId("DEV_TERM_MAP001");
+        MemberDetailTermDto source = new MemberDetailTermDto();
+        source.setChamber("House of Representatives");
+        source.setCongress(118);
+        source.setDistrict(1);
+        source.setMemberType("Representative");
+        source.setStartYear(2023);
+        source.setEndYear(2025);
+        source.setStateCode("VA");
+        source.setStateName("Virginia");
+
+        MemberTerm result = new MemberMapper().toMemberTerm(source, member);
+
+        assertSame(member, result.getMember());
+        assertNull(result.getId());
+        assertEquals("House of Representatives", result.getChamber());
+        assertEquals(118, result.getCongress());
+        assertEquals(1, result.getDistrict());
+        assertEquals("Representative", result.getMemberType());
+        assertEquals(2023, result.getStartYear());
+        assertEquals(2025, result.getEndYear());
+        assertEquals("VA", result.getStateCode());
+        assertEquals("Virginia", result.getStateName());
+    }
+
+    @Test
+    void keepsMissingTermFieldsNull() {
+        Member member = new Member();
+        MemberDetailTermDto source = new MemberDetailTermDto();
+        source.setChamber("Senate");
+        source.setStartYear(2025);
+
+        MemberTerm result = new MemberMapper().toMemberTerm(source, member);
+
+        assertSame(member, result.getMember());
+        assertEquals("Senate", result.getChamber());
+        assertEquals(2025, result.getStartYear());
+        assertNull(result.getEndYear());
+        assertNull(result.getDistrict());
+        assertNull(result.getCongress());
+        assertNull(result.getMemberType());
+        assertNull(result.getStateCode());
+        assertNull(result.getStateName());
+    }
+
+    @Test
+    void rejectsTermMappingWithoutAMember() {
+        assertThrows(NullPointerException.class,
+                () -> new MemberMapper().toMemberTerm(new MemberDetailTermDto(), null));
+    }
+
+    @Test
+    void rejectsTermMappingWithoutASource() {
+        assertThrows(NullPointerException.class,
+                () -> new MemberMapper().toMemberTerm(null, new Member()));
+    }
+
     @Test
     void addsDetailsToTheSameMember() {
         Member member = new Member();
