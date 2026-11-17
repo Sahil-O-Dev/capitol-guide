@@ -3,6 +3,8 @@ package dev.capitolguide.member;
 import dev.capitolguide.congress.CongressApiClient;
 import dev.capitolguide.congress.dto.MemberDetailDto;
 import dev.capitolguide.congress.dto.MemberDetailResponseDto;
+import dev.capitolguide.congress.dto.MemberDetailTermDto;
+import dev.capitolguide.congress.dto.PartyHistoryDto;
 import dev.capitolguide.congress.dto.MemberSummaryDto;
 import dev.capitolguide.congress.dto.TermDto;
 import dev.capitolguide.congress.dto.TermListDto;
@@ -17,7 +19,10 @@ import static org.mockito.Mockito.*;
 class MemberPreparationTest {
     private final CongressApiClient client = mock(CongressApiClient.class);
     private final MemberRepository repository = mock(MemberRepository.class);
-    private final MemberImportService service = new MemberImportService(client, new MemberMapper(), repository);
+    private final MemberTermRepository termRepository = mock(MemberTermRepository.class);
+    private final MemberPartyHistoryRepository partyRepository = mock(MemberPartyHistoryRepository.class);
+    private final MemberImportService service = new MemberImportService(
+            client, new MemberMapper(), repository, termRepository, partyRepository);
 
     @Test
     void combinesEachSummaryWithItsOwnDetailsWithoutSaving() {
@@ -25,7 +30,8 @@ class MemberPreparationTest {
         when(client.fetchDetailMember("DEV001")).thenReturn(detail("DEV001"));
         when(client.fetchDetailMember("DEV002")).thenReturn(detail("DEV002"));
 
-        List<Member> members = service.prepareMembers();
+        PreparedMembers prepared = service.prepareMembers();
+        List<Member> members = prepared.members();
 
         assertEquals(2, members.size());
         for (int i = 0; i < members.size(); i++) {
@@ -38,7 +44,43 @@ class MemberPreparationTest {
             assertEquals(Boolean.TRUE, member.getCurrentMember());
             assertEquals(Instant.parse("2026-11-05T08:36:10Z"), member.getSourceUpdateDate());
         }
-        verifyNoInteractions(repository);
+        assertTrue(prepared.terms().isEmpty());
+        assertTrue(prepared.partyHistory().isEmpty());
+        verifyNoInteractions(repository, termRepository, partyRepository);
+    }
+
+    @Test
+    void collectsAllHistoriesLinkedToTheirOwnPreparedMember() {
+        when(client.fetchAllMembers()).thenReturn(List.of(summary("DEV001"), summary("DEV002")));
+        for (String id : List.of("DEV001", "DEV002")) {
+            MemberDetailResponseDto response = detail(id);
+            MemberDetailTermDto earlier = new MemberDetailTermDto();
+            earlier.setStartYear(2021);
+            MemberDetailTermDto later = new MemberDetailTermDto();
+            later.setStartYear(2025);
+            PartyHistoryDto party = new PartyHistoryDto();
+            party.setPartyName("Fictional Party " + id);
+            response.getMember().setTerms(List.of(earlier, later));
+            response.getMember().setPartyHistory(List.of(party));
+            when(client.fetchDetailMember(id)).thenReturn(response);
+        }
+
+        PreparedMembers prepared = service.prepareMembers();
+
+        assertEquals(2, prepared.members().size());
+        assertEquals(4, prepared.terms().size());
+        assertEquals(2, prepared.partyHistory().size());
+        for (int i = 0; i < 2; i++) {
+            Member member = prepared.members().get(i);
+            assertSame(member, prepared.terms().get(i * 2).getMember());
+            assertSame(member, prepared.terms().get(i * 2 + 1).getMember());
+            assertEquals(2021, prepared.terms().get(i * 2).getStartYear());
+            assertEquals(2025, prepared.terms().get(i * 2 + 1).getStartYear());
+            assertSame(member, prepared.partyHistory().get(i).getMember());
+            assertEquals("Fictional Party " + member.getBioguideId(),
+                    prepared.partyHistory().get(i).getPartyName());
+        }
+        verifyNoInteractions(repository, termRepository, partyRepository);
     }
 
     @Test
@@ -49,7 +91,7 @@ class MemberPreparationTest {
         }
 
         verify(client, never()).fetchDetailMember(any());
-        verifyNoInteractions(repository);
+        verifyNoInteractions(repository, termRepository, partyRepository);
     }
 
     @Test
@@ -62,7 +104,7 @@ class MemberPreparationTest {
 
             assertEquals("Congress.gov returned mismatched member details for ID DEV001", error.getMessage());
         }
-        verifyNoInteractions(repository);
+        verifyNoInteractions(repository, termRepository, partyRepository);
     }
 
     @Test
@@ -73,7 +115,7 @@ class MemberPreparationTest {
         when(client.fetchDetailMember("DEV002")).thenThrow(failure);
 
         assertSame(failure, assertThrows(IllegalStateException.class, service::prepareMembers));
-        verifyNoInteractions(repository);
+        verifyNoInteractions(repository, termRepository, partyRepository);
     }
 
     @Test
@@ -85,16 +127,19 @@ class MemberPreparationTest {
         when(client.fetchDetailMember("DEV002")).thenReturn(malformed);
 
         assertThrows(IllegalArgumentException.class, service::prepareMembers);
-        verifyNoInteractions(repository);
+        verifyNoInteractions(repository, termRepository, partyRepository);
     }
 
     @Test
-    void returnsAnEmptyListForAnEmptySource() {
+    void returnsEmptyListsForAnEmptySource() {
         when(client.fetchAllMembers()).thenReturn(List.of());
 
-        assertTrue(service.prepareMembers().isEmpty());
+        PreparedMembers prepared = service.prepareMembers();
+        assertTrue(prepared.members().isEmpty());
+        assertTrue(prepared.terms().isEmpty());
+        assertTrue(prepared.partyHistory().isEmpty());
         verify(client, never()).fetchDetailMember(any());
-        verifyNoInteractions(repository);
+        verifyNoInteractions(repository, termRepository, partyRepository);
     }
 
     private MemberSummaryDto summary(String id) {
@@ -118,6 +163,8 @@ class MemberPreparationTest {
         detail.setOfficialWebsiteUrl("https://example.com/" + id);
         detail.setCurrentMember(true);
         detail.setUpdateDate("2026-11-05T08:36:10Z");
+        detail.setTerms(List.of());
+        detail.setPartyHistory(List.of());
         MemberDetailResponseDto response = new MemberDetailResponseDto();
         response.setMember(detail);
         return response;

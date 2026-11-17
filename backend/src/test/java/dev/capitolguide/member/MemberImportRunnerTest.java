@@ -11,14 +11,15 @@ class MemberImportRunnerTest {
     @Test
     void savesPreparedMembers() {
         MemberImportService service = mock(MemberImportService.class);
-        List<Member> members = List.of(new Member());
-        when(service.prepareMembers()).thenReturn(members);
+        PreparedMembers prepared = new PreparedMembers(
+                List.of(new Member()), List.of(new MemberTerm()), List.of(new MemberPartyHistory()));
+        when(service.prepareMembers()).thenReturn(prepared);
 
         new MemberImportRunner(service).run(null);
 
         var calls = inOrder(service);
         calls.verify(service).prepareMembers();
-        calls.verify(service).saveMembers(same(members));
+        calls.verify(service).saveMembers(same(prepared.members()));
     }
 
     @Test

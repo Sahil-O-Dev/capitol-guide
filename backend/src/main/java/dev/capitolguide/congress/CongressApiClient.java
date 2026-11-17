@@ -68,17 +68,4 @@ public class CongressApiClient
 
         return response;
     }
-
-    public List<MemberDetailResponseDto> fetchAllDetailMembers()
-    {
-        List<MemberSummaryDto> allMembers = fetchAllMembers();
-        List<MemberDetailResponseDto> allDetailMembers = new ArrayList<>();
-
-        for(MemberSummaryDto memberSummaryDto: allMembers)
-        {
-            String bioguideId = memberSummaryDto.getBioguideId();
-            allDetailMembers.add(fetchDetailMember(bioguideId));
-        }
-        return allDetailMembers;
-    }
 }

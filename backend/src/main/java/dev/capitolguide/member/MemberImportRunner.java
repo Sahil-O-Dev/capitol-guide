@@ -23,7 +23,6 @@ public class MemberImportRunner implements ApplicationRunner
     @Override
     public void run(ApplicationArguments args)
     {
-        List<Member> members = memberImportService.prepareMembers();
-        memberImportService.saveMembers(members);
+        memberImportService.saveMembers(memberImportService.prepareMembers().members());
     }
 }
