@@ -11,7 +11,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class MemberImportService {
@@ -116,6 +118,18 @@ public class MemberImportService {
 
     @Transactional
     public void saveMembers(PreparedMembers preparedMembers) {
+        if (preparedMembers.members().isEmpty()) {
+            throw new IllegalStateException("Refusing to replace members with an empty import");
+        }
+
+        Set<String> incomingIds = new HashSet<>();
+        for (Member member : preparedMembers.members()) {
+            requireText(member.getBioguideId(), "Bioguide ID", member.getBioguideId());
+            if (!incomingIds.add(member.getBioguideId())) {
+                throw new IllegalStateException("Duplicate member ID in import: " + member.getBioguideId());
+            }
+        }
+
         for (Member member : preparedMembers.members())
         {
             String id = member.getBioguideId();

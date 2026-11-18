@@ -98,6 +98,35 @@ class MemberImportServiceTest {
         }
     }
 
+    @Test
+    void emptyImportIsRejectedWithoutDeletingSavedMembersOrHistories() {
+        String id = "DEV_EMPTY_IMPORT";
+        memberImportService.saveMembers(withHistory(fictionalMember(id), 2021, "Fictional Old Party"));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThrows(IllegalStateException.class, () -> memberImportService.saveMembers(
+                new PreparedMembers(List.of(), List.of(), List.of())));
+
+        assertTrue(memberRepository.existsById(id));
+        assertHistory(id, 2021, "Fictional Old Party");
+    }
+
+    @Test
+    void duplicateIncomingIdsAreRejectedBeforeDeletingSavedMembers() {
+        String id = "DEV_DUPLICATE_IMPORT";
+        memberImportService.saveMembers(withHistory(fictionalMember(id), 2021, "Fictional Old Party"));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThrows(IllegalStateException.class, () -> memberImportService.saveMembers(
+                new PreparedMembers(List.of(fictionalMember("DEV_NEW"), fictionalMember("DEV_NEW")),
+                        List.of(), List.of())));
+
+        assertTrue(memberRepository.existsById(id));
+        assertHistory(id, 2021, "Fictional Old Party");
+    }
+
     private PreparedMembers withHistory(Member member, int startYear, String partyName) {
         MemberTerm term = new MemberTerm();
         term.setMember(member);
