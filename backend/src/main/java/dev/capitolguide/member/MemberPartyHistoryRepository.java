@@ -6,4 +6,5 @@ import java.util.List;
 
 public interface MemberPartyHistoryRepository extends JpaRepository<MemberPartyHistory, Long> {
     List<MemberPartyHistory> findByMember_BioguideIdOrderByStartYearAscIdAsc(String bioguideId);
+    void deleteByMember_BioguideId(String bioguideId);
 }

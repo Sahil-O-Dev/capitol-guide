@@ -6,4 +6,5 @@ import java.util.List;
 
 public interface MemberTermRepository extends JpaRepository<MemberTerm, Long> {
     List<MemberTerm> findByMember_BioguideIdOrderByStartYearAscIdAsc(String bioguideId);
+    void deleteByMember_BioguideId(String bioguideId);
 }

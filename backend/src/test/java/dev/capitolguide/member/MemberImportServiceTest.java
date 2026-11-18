@@ -32,6 +32,93 @@ class MemberImportServiceTest {
     private EntityManager entityManager;
 
     @Test
+    void repeatedRefreshReplacesHistoriesAndLeavesOtherMembersUntouched() {
+        Member original = fictionalMember("DEV_REFRESH_TARGET");
+        Member other = fictionalMember("DEV_REFRESH_OTHER");
+        memberImportService.saveMembers(withHistory(original, 2021, "Fictional Old Party"));
+        memberImportService.saveMembers(withHistory(other, 2023, "Fictional Other Party"));
+        entityManager.flush();
+        entityManager.clear();
+
+        for (int attempt = 0; attempt < 2; attempt++) {
+            Member refreshed = fictionalMember(original.getBioguideId());
+            memberImportService.saveMembers(withHistory(refreshed, 2025, "Fictional Updated Party"));
+            entityManager.flush();
+            entityManager.clear();
+
+            assertHistory(original.getBioguideId(), 2025, "Fictional Updated Party");
+            assertHistory(other.getBioguideId(), 2023, "Fictional Other Party");
+        }
+    }
+
+    @Test
+    void emptyReplacementRemovesOldHistories() {
+        Member member = fictionalMember("DEV_REFRESH_EMPTY");
+        memberImportService.saveMembers(withHistory(member, 2021, "Fictional Old Party"));
+        entityManager.flush();
+        entityManager.clear();
+
+        memberImportService.saveMembers(new PreparedMembers(
+                List.of(fictionalMember(member.getBioguideId())), List.of(), List.of()));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertTrue(memberRepository.existsById(member.getBioguideId()));
+        assertTrue(memberTermRepository.findByMember_BioguideIdOrderByStartYearAscIdAsc(
+                member.getBioguideId()).isEmpty());
+        assertTrue(memberPartyHistoryRepository.findByMember_BioguideIdOrderByStartYearAscIdAsc(
+                member.getBioguideId()).isEmpty());
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void failedRefreshRestoresDeletedHistoriesAndOriginalMember() {
+        String id = "DEV_REFRESH_ROLLBACK";
+        Member original = fictionalMember(id);
+        memberImportService.saveMembers(withHistory(original, 2021, "Fictional Old Party"));
+
+        try {
+            Member changed = fictionalMember(id);
+            changed.setName("Fictional Change That Must Roll Back");
+            PreparedMembers replacement = withHistory(changed, 2025, "Fictional New Party");
+            MemberPartyHistory invalidParty = new MemberPartyHistory();
+
+            assertThrows(DataIntegrityViolationException.class,
+                    () -> memberImportService.saveMembers(new PreparedMembers(
+                            replacement.members(), replacement.terms(), List.of(invalidParty))));
+
+            assertEquals(original.getName(), memberRepository.findById(id).orElseThrow().getName());
+            assertHistory(id, 2021, "Fictional Old Party");
+        } finally {
+            memberTermRepository.deleteAll(
+                    memberTermRepository.findByMember_BioguideIdOrderByStartYearAscIdAsc(id));
+            memberPartyHistoryRepository.deleteAll(
+                    memberPartyHistoryRepository.findByMember_BioguideIdOrderByStartYearAscIdAsc(id));
+            memberRepository.deleteAllById(List.of(id));
+        }
+    }
+
+    private PreparedMembers withHistory(Member member, int startYear, String partyName) {
+        MemberTerm term = new MemberTerm();
+        term.setMember(member);
+        term.setStartYear(startYear);
+        MemberPartyHistory party = new MemberPartyHistory();
+        party.setMember(member);
+        party.setPartyName(partyName);
+        return new PreparedMembers(List.of(member), List.of(term), List.of(party));
+    }
+
+    private void assertHistory(String id, int startYear, String partyName) {
+        List<MemberTerm> terms = memberTermRepository.findByMember_BioguideIdOrderByStartYearAscIdAsc(id);
+        List<MemberPartyHistory> parties = memberPartyHistoryRepository
+                .findByMember_BioguideIdOrderByStartYearAscIdAsc(id);
+        assertEquals(1, terms.size());
+        assertEquals(startYear, terms.getFirst().getStartYear());
+        assertEquals(1, parties.size());
+        assertEquals(partyName, parties.getFirst().getPartyName());
+    }
+
+    @Test
     void savesHistoriesForANewAndAnExistingMember() {
         Member existing = fictionalMember("DEV_HISTORY_EXISTING");
         memberRepository.saveAndFlush(existing);

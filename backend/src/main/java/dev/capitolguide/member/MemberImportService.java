@@ -65,6 +65,13 @@ public class MemberImportService {
 
     @Transactional
     public void saveMembers(PreparedMembers preparedMembers) {
+        for (Member member : preparedMembers.members())
+        {
+            String id = member.getBioguideId();
+            memberTermRepository.deleteByMember_BioguideId(id);
+            memberPartyHistoryRepository.deleteByMember_BioguideId(id);
+        }
+
         memberRepository.saveAll(preparedMembers.members());
         memberTermRepository.saveAll(preparedMembers.terms());
         memberPartyHistoryRepository.saveAll(preparedMembers.partyHistory());
