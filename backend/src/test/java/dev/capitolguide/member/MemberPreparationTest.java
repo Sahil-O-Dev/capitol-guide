@@ -12,6 +12,8 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Arrays;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -139,6 +141,104 @@ class MemberPreparationTest {
         assertTrue(prepared.terms().isEmpty());
         assertTrue(prepared.partyHistory().isEmpty());
         verify(client, never()).fetchDetailMember(any());
+        verifyNoInteractions(repository, termRepository, partyRepository);
+    }
+
+    @Test
+    void rejectsMissingRequiredTextBeforeRequestingDetails() {
+        List<Consumer<MemberSummaryDto>> fields = List.of(
+                member -> member.setName(null), member -> member.setName("  "),
+                member -> member.setPartyName(null), member -> member.setPartyName(""),
+                member -> member.setState(null), member -> member.setState("  "));
+        for (Consumer<MemberSummaryDto> removeField : fields) {
+            MemberSummaryDto member = summary("DEV001");
+            removeField.accept(member);
+            when(client.fetchAllMembers()).thenReturn(List.of(member));
+
+            IllegalStateException error = assertThrows(IllegalStateException.class, service::prepareMembers);
+            assertTrue(error.getMessage().contains("DEV001"));
+        }
+        verify(client, never()).fetchDetailMember(any());
+        verifyNoInteractions(repository, termRepository, partyRepository);
+    }
+
+    @Test
+    void rejectsMissingServiceTermsOrUnusableChamber() {
+        List<Consumer<MemberSummaryDto>> changes = List.of(
+                member -> member.setTerms(null),
+                member -> member.getTerms().setItem(null),
+                member -> member.getTerms().setItem(List.of()),
+                member -> member.getTerms().setItem(Arrays.asList((TermDto) null)),
+                member -> member.getTerms().getItem().getLast().setChamber(null),
+                member -> member.getTerms().getItem().getLast().setChamber("  "),
+                member -> member.getTerms().getItem().getLast().setChamber("Unknown"));
+        for (Consumer<MemberSummaryDto> change : changes) {
+            MemberSummaryDto member = summary("DEV001");
+            change.accept(member);
+            when(client.fetchAllMembers()).thenReturn(List.of(member));
+
+            assertThrows(IllegalStateException.class, service::prepareMembers);
+        }
+        verify(client, never()).fetchDetailMember(any());
+        verifyNoInteractions(repository, termRepository, partyRepository);
+    }
+
+    @Test
+    void rejectsMissingHistoriesOrNullEntriesWithoutSaving() {
+        List<Consumer<MemberDetailDto>> changes = List.of(
+                member -> member.setTerms(null),
+                member -> member.setPartyHistory(null),
+                member -> member.setTerms(Arrays.asList((MemberDetailTermDto) null)),
+                member -> member.setPartyHistory(Arrays.asList((PartyHistoryDto) null)));
+        for (Consumer<MemberDetailDto> change : changes) {
+            when(client.fetchAllMembers()).thenReturn(List.of(summary("DEV001"), summary("DEV002")));
+            when(client.fetchDetailMember("DEV001")).thenReturn(detail("DEV001"));
+            MemberDetailResponseDto malformed = detail("DEV002");
+            change.accept(malformed.getMember());
+            when(client.fetchDetailMember("DEV002")).thenReturn(malformed);
+
+            IllegalStateException error = assertThrows(IllegalStateException.class, service::prepareMembers);
+            assertTrue(error.getMessage().contains("DEV002"));
+        }
+        verifyNoInteractions(repository, termRepository, partyRepository);
+    }
+
+    @Test
+    void acceptsMissingOptionalValuesAndExplicitlyEmptyHistories() {
+        MemberSummaryDto member = summary("DEV001");
+        member.getTerms().getItem().getLast().setStartYear(null);
+        when(client.fetchAllMembers()).thenReturn(List.of(member));
+        MemberDetailResponseDto response = detail("DEV001");
+        response.getMember().setOfficialWebsiteUrl(null);
+        response.getMember().setCurrentMember(null);
+        response.getMember().setUpdateDate(null);
+        when(client.fetchDetailMember("DEV001")).thenReturn(response);
+
+        PreparedMembers prepared = service.prepareMembers();
+
+        Member saved = prepared.members().getFirst();
+        assertNull(saved.getImageUrl());
+        assertNull(saved.getDistrict());
+        assertNull(saved.getChamberStartYear());
+        assertNull(saved.getOfficialWebsiteUrl());
+        assertNull(saved.getCurrentMember());
+        assertNull(saved.getSourceUpdateDate());
+        assertTrue(prepared.terms().isEmpty());
+        assertTrue(prepared.partyHistory().isEmpty());
+        verifyNoInteractions(repository, termRepository, partyRepository);
+    }
+
+    @Test
+    void rejectsMissingResponseContainers() {
+        when(client.fetchAllMembers()).thenReturn(null);
+        assertThrows(IllegalStateException.class, service::prepareMembers);
+        when(client.fetchAllMembers()).thenReturn(Arrays.asList((MemberSummaryDto) null));
+        assertThrows(IllegalStateException.class, service::prepareMembers);
+        when(client.fetchAllMembers()).thenReturn(List.of(summary("DEV001")));
+        when(client.fetchDetailMember("DEV001")).thenReturn(null);
+        assertThrows(IllegalStateException.class, service::prepareMembers);
+        when(client.fetchDetailMember("DEV001")).thenReturn(new MemberDetailResponseDto());
+        assertThrows(IllegalStateException.class, service::prepareMembers);
         verifyNoInteractions(repository, termRepository, partyRepository);
     }
 
