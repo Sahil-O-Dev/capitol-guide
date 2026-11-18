@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -32,17 +33,20 @@ class MemberImportServiceTest {
     private EntityManager entityManager;
 
     @Test
-    void repeatedRefreshReplacesHistoriesAndLeavesOtherMembersUntouched() {
+    void repeatedRefreshReplacesHistoriesForAllIncomingMembers() {
         Member original = fictionalMember("DEV_REFRESH_TARGET");
         Member other = fictionalMember("DEV_REFRESH_OTHER");
-        memberImportService.saveMembers(withHistory(original, 2021, "Fictional Old Party"));
-        memberImportService.saveMembers(withHistory(other, 2023, "Fictional Other Party"));
+        memberImportService.saveMembers(combine(
+                withHistory(original, 2021, "Fictional Old Party"),
+                withHistory(other, 2023, "Fictional Other Party")));
         entityManager.flush();
         entityManager.clear();
 
         for (int attempt = 0; attempt < 2; attempt++) {
             Member refreshed = fictionalMember(original.getBioguideId());
-            memberImportService.saveMembers(withHistory(refreshed, 2025, "Fictional Updated Party"));
+            memberImportService.saveMembers(combine(
+                    withHistory(refreshed, 2025, "Fictional Updated Party"),
+                    withHistory(fictionalMember(other.getBioguideId()), 2023, "Fictional Other Party")));
             entityManager.flush();
             entityManager.clear();
 
@@ -75,7 +79,10 @@ class MemberImportServiceTest {
     void failedRefreshRestoresDeletedHistoriesAndOriginalMember() {
         String id = "DEV_REFRESH_ROLLBACK";
         Member original = fictionalMember(id);
-        memberImportService.saveMembers(withHistory(original, 2021, "Fictional Old Party"));
+        String departedId = "DEV_DEPARTURE_ROLLBACK";
+        memberImportService.saveMembers(combine(
+                withHistory(original, 2021, "Fictional Old Party"),
+                withHistory(fictionalMember(departedId), 2023, "Fictional Departed Party")));
 
         try {
             Member changed = fictionalMember(id);
@@ -89,13 +96,62 @@ class MemberImportServiceTest {
 
             assertEquals(original.getName(), memberRepository.findById(id).orElseThrow().getName());
             assertHistory(id, 2021, "Fictional Old Party");
+            assertTrue(memberRepository.existsById(departedId));
+            assertHistory(departedId, 2023, "Fictional Departed Party");
         } finally {
+            memberTermRepository.deleteAll(
+                    memberTermRepository.findByMember_BioguideIdOrderByStartYearAscIdAsc(departedId));
+            memberPartyHistoryRepository.deleteAll(
+                    memberPartyHistoryRepository.findByMember_BioguideIdOrderByStartYearAscIdAsc(departedId));
+            memberRepository.deleteAllById(List.of(departedId));
             memberTermRepository.deleteAll(
                     memberTermRepository.findByMember_BioguideIdOrderByStartYearAscIdAsc(id));
             memberPartyHistoryRepository.deleteAll(
                     memberPartyHistoryRepository.findByMember_BioguideIdOrderByStartYearAscIdAsc(id));
             memberRepository.deleteAllById(List.of(id));
         }
+    }
+
+    @Test
+    void completeRefreshRemovesDepartedMemberAndHistoriesWhileAddingAndUpdatingMembers() {
+        String departedId = "DEV_DEPARTED";
+        String retainedId = "DEV_RETAINED";
+        String addedId = "DEV_ADDED";
+        memberImportService.saveMembers(combine(
+                withHistory(fictionalMember(departedId), 2021, "Fictional Departed Party"),
+                withHistory(fictionalMember(retainedId), 2023, "Fictional Old Party")));
+        entityManager.flush();
+        entityManager.clear();
+
+        Member updated = fictionalMember(retainedId);
+        updated.setName("Fictional Updated Name");
+        PreparedMembers incoming = combine(
+                withHistory(updated, 2025, "Fictional Updated Party"),
+                withHistory(fictionalMember(addedId), 2025, "Fictional New Party"));
+        memberImportService.saveMembers(incoming);
+        entityManager.flush();
+        entityManager.clear();
+
+        assertFalse(memberRepository.existsById(departedId));
+        assertTrue(memberTermRepository.findByMember_BioguideIdOrderByStartYearAscIdAsc(departedId).isEmpty());
+        assertTrue(memberPartyHistoryRepository.findByMember_BioguideIdOrderByStartYearAscIdAsc(departedId).isEmpty());
+        assertEquals("Fictional Updated Name", memberRepository.findById(retainedId).orElseThrow().getName());
+        assertTrue(memberRepository.existsById(addedId));
+        assertEquals(2, memberRepository.count());
+        assertHistory(retainedId, 2025, "Fictional Updated Party");
+        assertHistory(addedId, 2025, "Fictional New Party");
+
+        // A real refresh prepares new history objects without old generated IDs.
+        Member refreshedAgain = fictionalMember(retainedId);
+        refreshedAgain.setName("Fictional Updated Name");
+        memberImportService.saveMembers(combine(
+                withHistory(refreshedAgain, 2025, "Fictional Updated Party"),
+                withHistory(fictionalMember(addedId), 2025, "Fictional New Party")));
+        entityManager.flush();
+        entityManager.clear();
+        assertEquals(2, memberRepository.count());
+        assertHistory(retainedId, 2025, "Fictional Updated Party");
+        assertHistory(addedId, 2025, "Fictional New Party");
     }
 
     @Test
@@ -125,6 +181,16 @@ class MemberImportServiceTest {
 
         assertTrue(memberRepository.existsById(id));
         assertHistory(id, 2021, "Fictional Old Party");
+    }
+
+    private PreparedMembers combine(PreparedMembers first, PreparedMembers second) {
+        List<Member> members = new ArrayList<>(first.members());
+        members.addAll(second.members());
+        List<MemberTerm> terms = new ArrayList<>(first.terms());
+        terms.addAll(second.terms());
+        List<MemberPartyHistory> parties = new ArrayList<>(first.partyHistory());
+        parties.addAll(second.partyHistory());
+        return new PreparedMembers(members, terms, parties);
     }
 
     private PreparedMembers withHistory(Member member, int startYear, String partyName) {

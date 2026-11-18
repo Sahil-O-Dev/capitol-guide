@@ -118,6 +118,7 @@ public class MemberImportService {
 
     @Transactional
     public void saveMembers(PreparedMembers preparedMembers) {
+        // This method saves the complete current-member snapshot, not a partial update.
         if (preparedMembers.members().isEmpty()) {
             throw new IllegalStateException("Refusing to replace members with an empty import");
         }
@@ -127,6 +128,15 @@ public class MemberImportService {
             requireText(member.getBioguideId(), "Bioguide ID", member.getBioguideId());
             if (!incomingIds.add(member.getBioguideId())) {
                 throw new IllegalStateException("Duplicate member ID in import: " + member.getBioguideId());
+            }
+        }
+
+        for (Member savedMember : memberRepository.findAll()) {
+            String id = savedMember.getBioguideId();
+            if (!incomingIds.contains(id)) {
+                memberTermRepository.deleteByMember_BioguideId(id);
+                memberPartyHistoryRepository.deleteByMember_BioguideId(id);
+                memberRepository.delete(savedMember);
             }
         }
 
